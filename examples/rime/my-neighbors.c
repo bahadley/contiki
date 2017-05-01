@@ -4,20 +4,6 @@
  * \author
  *         Ben Hadley
  *            based on example_neighbors.c
- *
- *         This example shows how to send broadcast and unicast, as
- *         well as how to use the Contiki memory block manager (MEMB)
- *         and the Contiki list library (LIST) to keep track of
- *         neighbors. The program consists of two processes, one that
- *         periodically sends broadcast messages and one that
- *         periodically sends unicast messages to random neighbors. A
- *         list of neighbors is maintained. The list is populated from
- *         the reception of broadcast messages from neighbors. The
- *         neighbor list keeps a simple set of quality metrics for
- *         each neighbor: a moving average of sequence number gaps,
- *         which indicates the number of broadcast packets that have
- *         been lost; a the last RSSI received; and the last LQI
- *         received.
  */
 
 
@@ -32,17 +18,6 @@
 /* This is the structure of broadcast messages. */
 struct broadcast_message {
   uint8_t seqno;
-};
-
-/* This is the structure of unicast ping messages. */
-struct unicast_message {
-  uint8_t type;
-};
-
-/* These are the types of unicast messages that we can send. */
-enum {
-  UNICAST_TYPE_PING,
-  UNICAST_TYPE_PONG
 };
 
 /* This structure holds information about neighbors. */
@@ -83,7 +58,6 @@ LIST(neighbors_list);
 
 /* These hold the broadcast and unicast structures, respectively. */
 static struct broadcast_conn broadcast;
-static struct unicast_conn unicast;
 
 /* These two defines are used for computing the moving average for the
    broadcast sequence number gaps. */
@@ -93,12 +67,10 @@ static struct unicast_conn unicast;
 /*---------------------------------------------------------------------------*/
 /* We first declare our two processes. */
 PROCESS(broadcast_process, "Broadcast process");
-PROCESS(unicast_process, "Unicast process");
-
 /* The AUTOSTART_PROCESSES() definition specifices what processes to
    start when this module is loaded. We put both our processes
    there. */
-AUTOSTART_PROCESSES(&broadcast_process, &unicast_process);
+AUTOSTART_PROCESSES(&broadcast_process);
 /*---------------------------------------------------------------------------*/
 /* This function is called whenever a broadcast message is received. */
 static void
@@ -174,33 +146,6 @@ broadcast_recv(struct broadcast_conn *c, const linkaddr_t *from)
    broadcast_open() call below. */
 static const struct broadcast_callbacks broadcast_call = {broadcast_recv};
 /*---------------------------------------------------------------------------*/
-/* This function is called for every incoming unicast packet. */
-static void
-recv_uc(struct unicast_conn *c, const linkaddr_t *from)
-{
-  struct unicast_message *msg;
-
-  /* Grab the pointer to the incoming data. */
-  msg = packetbuf_dataptr();
-
-  /* We have two message types, UNICAST_TYPE_PING and
-     UNICAST_TYPE_PONG. If we receive a UNICAST_TYPE_PING message, we
-     print out a message and return a UNICAST_TYPE_PONG. */
-  if(msg->type == UNICAST_TYPE_PING) {
-    printf("unicast ping received from %d.%d\n",
-           from->u8[0], from->u8[1]);
-    msg->type = UNICAST_TYPE_PONG;
-    packetbuf_copyfrom(msg, sizeof(struct unicast_message));
-    /* Send it back to where it came from. */
-    unicast_send(c, from);
-  }
-  else if(msg->type == UNICAST_TYPE_PONG) {
-    printf("unicast pong received from %d.%d\n",
-           from->u8[0], from->u8[1]);
-  }
-}
-static const struct unicast_callbacks unicast_callbacks = {recv_uc};
-/*---------------------------------------------------------------------------*/
 PROCESS_THREAD(broadcast_process, ev, data)
 {
   static struct etimer et;
@@ -224,42 +169,6 @@ PROCESS_THREAD(broadcast_process, ev, data)
     packetbuf_copyfrom(&msg, sizeof(struct broadcast_message));
     broadcast_send(&broadcast);
     seqno++;
-  }
-
-  PROCESS_END();
-}
-/*---------------------------------------------------------------------------*/
-PROCESS_THREAD(unicast_process, ev, data)
-{
-  PROCESS_EXITHANDLER(unicast_close(&unicast);)
-    
-  PROCESS_BEGIN();
-
-  unicast_open(&unicast, 146, &unicast_callbacks);
-
-  while(1) {
-    static struct etimer et;
-    struct unicast_message msg;
-    struct neighbor *n;
-    int randneighbor, i;
-    
-    etimer_set(&et, CLOCK_SECOND * 8 + random_rand() % (CLOCK_SECOND * 8));
-    
-    PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&et));
-
-    /* Pick a random neighbor from our list and send a unicast message to it. */
-    if(list_length(neighbors_list) > 0) {
-      randneighbor = random_rand() % list_length(neighbors_list);
-      n = list_head(neighbors_list);
-      for(i = 0; i < randneighbor; i++) {
-        n = list_item_next(n);
-      }
-      printf("sending unicast to %d.%d\n", n->addr.u8[0], n->addr.u8[1]);
-
-      msg.type = UNICAST_TYPE_PING;
-      packetbuf_copyfrom(&msg, sizeof(msg));
-      unicast_send(&unicast, &n->addr);
-    }
   }
 
   PROCESS_END();
