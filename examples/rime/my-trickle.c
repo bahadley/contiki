@@ -37,7 +37,7 @@ PROCESS_THREAD(example_trickle_process, ev, data)
 
   while(1) {
     /* Delay 2-4 seconds */
-    etimer_set(&et, CLOCK_SECOND * 8 + random_rand() % (CLOCK_SECOND * 4));
+    etimer_set(&et, CLOCK_SECOND * 2 + random_rand() % (CLOCK_SECOND * 2));
 
     PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&et));
 
