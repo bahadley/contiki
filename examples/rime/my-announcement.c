@@ -34,6 +34,8 @@ MEMB(neighbors_memb, struct neighbor, MAX_NEIGHBORS);
    have seen thus far. */
 LIST(neighbors_list);
 
+uint8_t neighbors;
+
 /*---------------------------------------------------------------------------*/
 PROCESS(example_announcement_process, "Example announcement process");
 AUTOSTART_PROCESSES(&example_announcement_process);
@@ -57,7 +59,7 @@ received_announcement(struct announcement *a, const linkaddr_t *from,
        the address of the neighbor from which we received this
        broadcast message. */
     if(linkaddr_cmp(&n->addr, from)) {
-      printf("Neighbor found %d.%d\n", from->u8[0], from->u8[1]);
+      printf("Neighbor found %d.%d neighbors: %d\n", from->u8[0], from->u8[1], neighbors);
       break;
     }
   }
@@ -81,8 +83,10 @@ received_announcement(struct announcement *a, const linkaddr_t *from,
     /* Place the neighbor on the neighbor list. */
     list_add(neighbors_list, n);
 
-    printf("Neighbor added %d.%d\n", from->u8[0], from->u8[1]);
+    printf("Neighbor added %d.%d neighbors: %d\n", from->u8[0], from->u8[1], neighbors);
   }
+
+  neighbors |= (1 << (from->u8[0] - 1));
 }
 static struct announcement example_announcement;
 /*---------------------------------------------------------------------------*/
@@ -102,6 +106,8 @@ PROCESS_THREAD(example_announcement_process, ev, data)
 
   /* Set the lowest eight bytes of the Rime address as the value. */
   announcement_set_value(&example_announcement, linkaddr_node_addr.u8[0]);
+  neighbors = 0;
+  neighbors |= (1 << (linkaddr_node_addr.u8[0] - 1));
 
   while(1) {
     static struct etimer et;
