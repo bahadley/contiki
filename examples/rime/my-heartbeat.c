@@ -1,5 +1,4 @@
 #include "contiki.h"
-#include "lib/list.h"
 #include "lib/memb.h"
 #include "net/rime/polite.h"
 
@@ -18,9 +17,8 @@ struct leader {
   struct ctimer ctimer;
 };
 
-#define MAX_LEADERS 1
-LIST(leader_table);
-MEMB(leader_mem, struct leader, MAX_LEADERS);
+MEMB(leader_mem, struct leader, 1);
+static struct leader *ldr;
 /*---------------------------------------------------------------------------*/
 PROCESS(example_heartbeat, "heartbeat example");
 AUTOSTART_PROCESSES(&example_heartbeat);
@@ -29,9 +27,9 @@ AUTOSTART_PROCESSES(&example_heartbeat);
 static void
 clear_leader(void *n)
 {
-  struct leader *l = n;
-  l->leader = 0;
-  l->resend = 3;
+  struct leader *ldr = n;
+  ldr->leader = 0;
+  ldr->resend = 3;
 }
 
 static void
@@ -42,11 +40,10 @@ recv(struct polite_conn *c)
   printf("message received '0x%02x'\n", hrt_bt);
 
   if (hrt_bt == FIXED_LEADER_ID) {
-    struct leader *e = list_head(leader_table);
-    if(e != NULL && e->leader == NO_LEADER_ID) {
-      e->leader = hrt_bt; 
-      e->resend = 3;
-      ctimer_set(&e->ctimer, LEADER_TIMEOUT, clear_leader, e);
+    if(ldr != NULL && ldr->leader == NO_LEADER_ID) {
+      ldr->leader = hrt_bt; 
+      ldr->resend = 3;
+      ctimer_set(&ldr->ctimer, LEADER_TIMEOUT, clear_leader, ldr);
     }
   }
 }
@@ -81,12 +78,10 @@ PROCESS_THREAD(example_heartbeat, ev, data)
     polite_open(&c, CHANNEL, &follower_callbacks);
 
     memb_init(&leader_mem);
-    list_init(leader_table);
-    struct leader *e = memb_alloc(&leader_mem);
-    if(e != NULL) {
-      e->leader = NO_LEADER_ID; 
-      e->resend = 0;
-      list_add(leader_table, e);
+    ldr = memb_alloc(&leader_mem);
+    if(ldr != NULL) {
+      ldr->leader = NO_LEADER_ID; 
+      ldr->resend = 0;
     }
   }
 
@@ -96,15 +91,14 @@ PROCESS_THREAD(example_heartbeat, ev, data)
     PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&et));
 
     if (linkaddr_node_addr.u8[0] == FIXED_LEADER_ID) {
-      uint8_t ldr = FIXED_LEADER_ID;
-      packetbuf_copyfrom(&ldr, sizeof(ldr));
+      uint8_t ldr_id = FIXED_LEADER_ID;
+      packetbuf_copyfrom(&ldr_id, sizeof(ldr_id));
       polite_send(&c, CLOCK_SECOND * 4, 4);
     }
     else {
-      struct leader *l = list_head(leader_table);
-      if(l != NULL && l->resend > 0) {
-        packetbuf_copyfrom(&l->leader, sizeof(l->leader));
-        l->resend -= 1;
+      if(ldr != NULL && ldr->resend > 0) {
+        packetbuf_copyfrom(&ldr->leader, sizeof(ldr->leader));
+        ldr->resend -= 1;
         polite_send(&c, CLOCK_SECOND * 4, 4);
       }
     }
