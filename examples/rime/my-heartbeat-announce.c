@@ -17,7 +17,7 @@
 
 #define FIXED_LEADER_ID 1
 #define NO_LEADER_ID 0
-#define LEADER_TIMEOUT 60 * CLOCK_SECOND
+#define LEADER_TIMEOUT 30 * CLOCK_SECOND
 
 struct current_leader {
   uint16_t leader;
@@ -37,7 +37,7 @@ clear_leader(void *n)
 {
   struct announcement *a = n;
   ldr->leader = NO_LEADER_ID;
-  announcement_set_value(a, NO_LEADER_ID);
+  /*announcement_set_value(a, ldr->leader);*/
 }
 
 static void
@@ -56,7 +56,7 @@ received_announcement(struct announcement *a, const linkaddr_t *from,
     ctimer_set(&ldr->ctimer, LEADER_TIMEOUT, clear_leader, a);
   }
 
-  announcement_set_value(a, ldr->leader);
+  /*announcement_set_value(a, ldr->leader);*/
 }
 
 static struct announcement heartbeat_announcement;
@@ -79,7 +79,7 @@ PROCESS_THREAD(heartbeat_announcement_process, ev, data)
     announcement_set_value(&heartbeat_announcement, FIXED_LEADER_ID);
   }
   else {
-    announcement_set_value(&heartbeat_announcement, NO_LEADER_ID);
+    /*announcement_set_value(&heartbeat_announcement, NO_LEADER_ID);*/
 
     memb_init(&leader_mem);
     ldr = memb_alloc(&leader_mem);
@@ -94,7 +94,12 @@ PROCESS_THREAD(heartbeat_announcement_process, ev, data)
     /* Listen for announcements every ten seconds. */
     etimer_set(&et, CLOCK_SECOND * 10);
     PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&et));
-    announcement_listen(1);
+
+    if (linkaddr_node_addr.u8[0] == FIXED_LEADER_ID) {
+      announcement_bump(&heartbeat_announcement);
+    } else {
+      announcement_listen(1);
+    }
   }
 
   PROCESS_END();
