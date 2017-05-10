@@ -8,9 +8,10 @@
 
 #include "contiki.h"
 #include "net/rime/rime.h"
-#include "random.h"
 
 #include <stdio.h>
+
+#define FIXED_LEADER_ID 1
 
 /*---------------------------------------------------------------------------*/
 PROCESS(example_broadcast_process, "Broadcast example");
@@ -20,8 +21,8 @@ AUTOSTART_PROCESSES(&example_broadcast_process);
 static void
 broadcast_recv(struct broadcast_conn *c, const linkaddr_t *from)
 {
-  printf("broadcast message received from %d.%d: '%s'\n",
-         from->u8[0], from->u8[1], (char *)packetbuf_dataptr());
+  printf("broadcast message received from %d.%d: '0x%02x'\n",
+         from->u8[0], from->u8[1], ((uint8_t *)packetbuf_dataptr())[0]);
 }
 
 static const struct broadcast_callbacks broadcast_call = {broadcast_recv};
@@ -41,14 +42,22 @@ PROCESS_THREAD(example_broadcast_process, ev, data)
 
   while(1) {
 
-    /* Delay 2-4 seconds */
-    etimer_set(&et, CLOCK_SECOND * 4 + random_rand() % (CLOCK_SECOND * 4));
+    if (linkaddr_node_addr.u8[0] == FIXED_LEADER_ID) {
+      etimer_set(&et, CLOCK_SECOND * 4);
+    } else {
+      etimer_set(&et, CLOCK_SECOND * 8);
+    }
 
     PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&et));
 
-    packetbuf_copyfrom("All work and no play makes Jon a dull boy", 42);
-    broadcast_send(&broadcast);
-    printf("broadcast message sent\n");
+    if (linkaddr_node_addr.u8[0] == FIXED_LEADER_ID) {
+      packetbuf_copyfrom(&linkaddr_node_addr.u8[0], 1);
+      /* packetbuf_copyfrom("Alive", 6); */
+      broadcast_send(&broadcast);
+      printf("broadcast message sent\n");
+    } else {
+      printf("Follower awake\n");
+    }
   }
 
   PROCESS_END();
