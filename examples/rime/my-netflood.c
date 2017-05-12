@@ -22,13 +22,13 @@ AUTOSTART_PROCESSES(&netflood_process);
 static void
 clear_leader(void *ptr)
 {
-  ldr.leader = NO_LEADER_ID;
   printf("ALERT: no leader\n");
+  ldr.leader = NO_LEADER_ID;
 }
 
-static int 
+int 
 recv(struct netflood_conn *c, const linkaddr_t *from,
-               const linkaddr_t *originator, uint8_t seqno, uint8_t hops)
+     const linkaddr_t *originator, uint8_t seqno, uint8_t hops)
 {
   printf("from: %d.%d, originator: %d.%d, seq: %d, hops: %d\n", 
     from->u8[0], from->u8[1], originator->u8[0], originator->u8[1], seqno, hops);
@@ -39,13 +39,13 @@ recv(struct netflood_conn *c, const linkaddr_t *from,
   return 1;
 }
 
-static void
+void
 sent(struct netflood_conn *c)
 {
   printf("sent\n");
 }
 
-static void
+void
 dropped(struct netflood_conn *c)
 {
   printf("dropped\n");
@@ -72,8 +72,6 @@ PROCESS_THREAD(netflood_process, ev, data)
     if (linkaddr_node_addr.u8[0] == FIXED_LEADER_ID) {
       seqno += 1;
       netflood_send(&c, seqno);
-    } else {
-      printf("Follower awake\n");
     }
   }
   
