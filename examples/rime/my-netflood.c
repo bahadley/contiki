@@ -5,15 +5,14 @@
 
 #define FIXED_LEADER_ID 1
 #define NO_LEADER_ID 0
-#define LEADER_TIMEOUT 10 * CLOCK_SECOND
+#define LEADER_TIMEOUT 20 * CLOCK_SECOND
 
 struct current_leader {
   uint8_t leader;
   struct ctimer ctimer;
 };
 
-MEMB(leader_mem, struct current_leader, 1);
-static struct current_leader *ldr;
+static struct current_leader ldr;
 
 /*---------------------------------------------------------------------------*/
 PROCESS(netflood_process, "heartbeat-netflood");
@@ -21,11 +20,10 @@ AUTOSTART_PROCESSES(&netflood_process);
 /*---------------------------------------------------------------------------*/
 
 static void
-clear_leader(void *n)
+clear_leader(void *ptr)
 {
-  struct current_leader *l = (struct current_leader *)n;
-  l->leader = NO_LEADER_ID;
-  printf("leader failed");
+  ldr.leader = NO_LEADER_ID;
+  printf("ALERT: no leader\n");
 }
 
 static int 
@@ -35,8 +33,8 @@ recv(struct netflood_conn *c, const linkaddr_t *from,
   printf("from: %d.%d, originator: %d.%d, seq: %d, hops: %d\n", 
     from->u8[0], from->u8[1], originator->u8[0], originator->u8[1], seqno, hops);
 
-  ldr->leader = originator->u8[0];
-  ctimer_set(&ldr->ctimer, LEADER_TIMEOUT, clear_leader, ldr);
+  ldr.leader = originator->u8[0];
+  ctimer_set(&ldr.ctimer, LEADER_TIMEOUT, clear_leader, NULL);
 
   return 1;
 }
@@ -65,21 +63,13 @@ PROCESS_THREAD(netflood_process, ev, data)
 
   netflood_open(&c, CLOCK_SECOND * 4, 136, &callbacks);
 
-  if (linkaddr_node_addr.u8[0] != FIXED_LEADER_ID) {
-    memb_init(&leader_mem);
-    ldr = memb_alloc(&leader_mem);
-    if(ldr != NULL) {
-      ldr->leader = NO_LEADER_ID;
-    }
-  }
-
+  static struct etimer et;
   static uint8_t seqno = 0;
 
   while(1) {
-    static struct etimer et;
     etimer_set(&et, CLOCK_SECOND * 4);
     PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&et));
-    if (linkaddr_node_addr.u8[0] == 1) {
+    if (linkaddr_node_addr.u8[0] == FIXED_LEADER_ID) {
       seqno += 1;
       netflood_send(&c, seqno);
     } else {
